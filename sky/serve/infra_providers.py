@@ -57,6 +57,13 @@ class ProcessStatus(enum.Enum):
     FAILED = 'FAILED'
 
 
+class SpotPolicy(enum.Enum):
+
+    NAIVE_SPREAD = 'NaiveSpread'
+    EAGER_FAILOVER = 'EagerFailover'
+    SINGLE_ZONE = 'SingleZone'
+
+
 class ReplicaStatusProperty:
     """Some properties that determine replica status."""
 
@@ -250,23 +257,38 @@ class InfraProvider:
 class SkyPilotInfraProvider(InfraProvider):
     """Infra provider for SkyPilot clusters."""
 
-    def __init__(self, task_yaml_path: str, service_name: str, use_spot: bool, regions: Optional[List[str]] = None,
-                 *args, **kwargs) -> None:
+    def __init__(self,
+                 task_yaml_path: str,
+                 service_name: str,
+                 use_spot: bool,
+                 *args,
+                 zones: Optional[List[str]] = None,
+                 spot_policy: Optional[str] = None,
+                 **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.task_yaml_path: str = task_yaml_path
         self.service_name: str = service_name
         self.use_spot: bool = use_spot
-        self.regions: Optional[List[str]] = regions
+        self.zones: Optional[List[str]] = zones
+        self.current_zone_idx: int = 0
+        self.last_zone: str = ''
         self.next_replica_id: int = 1
         self.launch_process_pool: serve_utils.ThreadSafeDict[
             str, subprocess.Popen] = serve_utils.ThreadSafeDict()
         self.down_process_pool: serve_utils.ThreadSafeDict[
             str, subprocess.Popen] = serve_utils.ThreadSafeDict()
 
+        if spot_policy == 'NaiveSpread':
+            self.spot_policy = SpotPolicy.NAIVE_SPREAD
+        elif spot_policy == 'EagerFailover':
+            self.spot_policy = SpotPolicy.EAGER_FAILOVER
+        elif spot_policy == 'SingleZone':
+            self.spot_policy = SpotPolicy.SINGLE_ZONE
+
+        print('SkyPilotInfraProvider', zones, flush=True)
+
         self._start_process_pool_refresher()
         self._start_job_status_fetcher()
-        
-        print(regions, flush=True)
 
     # This process periodically checks all sky.launch and sky.down process
     # on the fly. If any of them finished, it will update the status of
@@ -418,6 +440,24 @@ class SkyPilotInfraProvider(InfraProvider):
                 ready_replicas.add(info.ip)
         return ready_replicas
 
+    def _get_next_zone(self) -> str:
+        assert self.zones is not None
+        if self.spot_policy == SpotPolicy.NAIVE_SPREAD:
+            zone = self.zones[self.current_zone_idx]
+            self.current_zone_idx += 1
+        elif self.spot_policy == SpotPolicy.EAGER_FAILOVER:
+            zone = random.choice(self.zones)
+            while zone == self.last_zone:
+                zone = random.choice(self.zones)
+            self.last_zone = zone
+        elif self.spot_policy == SpotPolicy.SINGLE_ZONE:
+            if self.last_zone:
+                zone = self.last_zone
+            else:
+                zone = random.choice(self.zones)
+                self.last_zone = zone
+        return zone
+
     def _launch_cluster(self, replica_id: int) -> None:
         cluster_name = serve_utils.generate_replica_cluster_name(
             self.service_name, replica_id)
@@ -426,12 +466,17 @@ class SkyPilotInfraProvider(InfraProvider):
                            'already exists. Skipping.')
             return
         logger.info(f'Creating SkyPilot cluster {cluster_name}')
-        if self.regions:
-            random_region = random.choice(self.regions)
-            cmd = ['sky', 'launch', self.task_yaml_path, '-c', cluster_name, '--region', random_region, '-y']
-            print('Randomly chosen region: ', random_region, flush=True)
+        if self.zones:
+            zone = self._get_next_zone()
+            cmd = [
+                'sky', 'launch', self.task_yaml_path, '-c', cluster_name,
+                '--zone', zone, '-y'
+            ]
+            print('Chosen zone: ', zone, flush=True)
         else:
-            cmd = ['sky', 'launch', self.task_yaml_path, '-c', cluster_name, '-y']
+            cmd = [
+                'sky', 'launch', self.task_yaml_path, '-c', cluster_name, '-y'
+            ]
         cmd.extend(['--detach-setup', '--detach-run', '--retry-until-up'])
         fn = serve_utils.generate_replica_launch_log_file_name(
             self.service_name, replica_id)

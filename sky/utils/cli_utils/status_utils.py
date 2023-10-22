@@ -129,6 +129,7 @@ def show_service_table(service_records: List[_ServiceRecord], show_all: bool):
                      show_by_default=False),
         StatusColumn('ENDPOINT', _get_endpoint),
         StatusColumn('POLICY', _get_policy, show_by_default=False),
+        StatusColumn('SPOTPOLICY', _get_spot_policy, show_by_default=False),
         StatusColumn('REQUESTED_RESOURCES',
                      _get_requested_resources,
                      show_by_default=False),
@@ -405,6 +406,14 @@ def _get_controller_name(service_record: _ServiceRecord) -> str:
 def _get_policy(service_record: _ServiceRecord) -> str:
     handle = _get_service_handle(service_record)
     return handle.policy
+
+
+def _get_spot_policy(service_record: _ServiceRecord) -> str:
+    handle = _get_service_handle(service_record)
+    if hasattr(handle, 'spot_policy') and handle.spot_policy is not None:
+        return handle.spot_policy
+    else:
+        return 'None'
 
 
 def _get_requested_resources(service_record: _ServiceRecord) -> 'sky.Resources':

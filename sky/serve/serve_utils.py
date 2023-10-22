@@ -302,6 +302,7 @@ class ServiceHandle(object):
         *,
         service_name: str,
         policy: str,
+        spot_policy: Optional[str],
         requested_resources: 'sky.Resources',
         requested_controller_resources: 'sky.Resources',
         uptime: Optional[int] = None,
@@ -316,6 +317,7 @@ class ServiceHandle(object):
         self.uptime = uptime
         self.endpoint_ip = endpoint_ip
         self.policy = policy
+        self.spot_policy = spot_policy
         self.requested_resources = requested_resources
         self.requested_controller_resources = requested_controller_resources
         self.controller_port = controller_port
@@ -329,6 +331,7 @@ class ServiceHandle(object):
                 f'\n\tuptime={self.uptime},'
                 f'\n\tendpoint_ip={self.endpoint_ip},'
                 f'\n\tpolicy={self.policy},'
+                f'\n\tspot_policy={self.spot_policy},'
                 f'\n\trequested_resources={self.requested_resources},'
                 '\n\trequested_controller_resources='
                 f'{self.requested_controller_resources},'

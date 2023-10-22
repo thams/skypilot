@@ -13,7 +13,8 @@ service:
   readiness_probe:
     path: /health
     initial_delay_seconds: 20
-  replicas: 1
+  replicas: 6
   controller_resources:
     cloud: gcp
-  regions: ['us-central1-a', 'us-central1-b', 'us-central1-c']
+  zones: ['us-central1-b', 'us-central1-a', 'us-central1-c']
+  spot_policy: EagerFailover

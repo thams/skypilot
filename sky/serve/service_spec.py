@@ -27,7 +27,8 @@ class SkyServiceSpec:
         post_data: Optional[Dict[str, Any]] = None,
         controller_resources: Optional[Dict[str, Any]] = None,
         auto_restart: bool = False,
-        regions: Optional[List[str]] = None,
+        zones: Optional[List[str]] = None,
+        spot_policy: Optional[str] = None,
     ):
         if min_replicas < 0:
             with ux_utils.print_exception_no_traceback():
@@ -57,9 +58,10 @@ class SkyServiceSpec:
         self._post_data = post_data
         self._controller_resources = controller_resources
         self._auto_restart = auto_restart
-        self._regions = regions
-        print(regions, flush=True)
-        
+        self._zones = zones
+        self._spot_policy = spot_policy
+        print('SkyServiceSpec', zones, spot_policy, flush=True)
+
     @staticmethod
     def from_yaml_config(config: Optional[Dict[str, Any]]):
         if config is None:
@@ -126,8 +128,8 @@ class SkyServiceSpec:
 
         service_config['controller_resources'] = config.pop(
             'controller_resources', None)
-        service_config['regions'] = config.pop('regions', None)
-        
+        service_config['zones'] = config.pop('zones', None)
+        service_config['spot_policy'] = config.pop('spot_policy', None)
         return SkyServiceSpec(**service_config)
 
     @staticmethod
@@ -178,8 +180,8 @@ class SkyServiceSpec:
         add_if_not_none('replica_policy', 'auto_restart', self._auto_restart)
         add_if_not_none('controller_resources', None,
                         self._controller_resources)
-        add_if_not_none('regions', None, self._regions)
-
+        add_if_not_none('zones', None, self._zones)
+        add_if_not_none('spot_policy', None, self.spot_policy)
         return config
 
     def probe_str(self):
@@ -249,7 +251,11 @@ class SkyServiceSpec:
     @property
     def auto_restart(self) -> bool:
         return self._auto_restart
-    
+
     @property
-    def regions(self) -> Optional[List[str]]:
-        return self._regions
+    def zones(self) -> Optional[List[str]]:
+        return self._zones
+
+    @property
+    def spot_policy(self) -> Optional[str]:
+        return self._spot_policy

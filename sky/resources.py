@@ -968,6 +968,8 @@ class Resources:
                 for p in ports:
                     if isinstance(p, int):
                         port_set.add(p)
+                    elif '-' not in p:
+                        port_set.add(int(p))
                     else:
                         from_port, to_port = p.split('-')
                         port_set.update(range(int(from_port), int(to_port) + 1))

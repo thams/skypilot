@@ -211,8 +211,11 @@ def get_service_schema():
             'controller_resources': {
                 'type': 'object',
             },
-            'regions': {
+            'zones': {
                 'type': 'array',
+            },
+            'spot_policy': {
+                'type': 'string',
             }
         }
     }

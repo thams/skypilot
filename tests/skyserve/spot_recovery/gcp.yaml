@@ -1,7 +1,6 @@
 resources:
   cloud: gcp
   cpus: 2+
-  zone: us-central1-a
   use_spot: True
 
 workdir: sky/serve/examples/http_server
@@ -17,3 +16,4 @@ service:
   replicas: 1
   controller_resources:
     cloud: gcp
+  regions: ['us-central1-a', 'us-central1-b', 'us-central1-c']

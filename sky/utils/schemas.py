@@ -211,6 +211,9 @@ def get_service_schema():
             'controller_resources': {
                 'type': 'object',
             },
+            'regions': {
+                'type': 'array',
+            }
         }
     }
 

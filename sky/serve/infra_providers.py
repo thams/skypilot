@@ -250,12 +250,13 @@ class InfraProvider:
 class SkyPilotInfraProvider(InfraProvider):
     """Infra provider for SkyPilot clusters."""
 
-    def __init__(self, task_yaml_path: str, service_name: str, use_spot: bool,
+    def __init__(self, task_yaml_path: str, service_name: str, use_spot: bool, regions: Optional[List[str]] = None,
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.task_yaml_path: str = task_yaml_path
         self.service_name: str = service_name
         self.use_spot: bool = use_spot
+        self.regions: Optional[List[str]] = regions
         self.next_replica_id: int = 1
         self.launch_process_pool: serve_utils.ThreadSafeDict[
             str, subprocess.Popen] = serve_utils.ThreadSafeDict()
@@ -264,6 +265,8 @@ class SkyPilotInfraProvider(InfraProvider):
 
         self._start_process_pool_refresher()
         self._start_job_status_fetcher()
+        
+        print(regions, flush=True)
 
     # This process periodically checks all sky.launch and sky.down process
     # on the fly. If any of them finished, it will update the status of
@@ -423,7 +426,12 @@ class SkyPilotInfraProvider(InfraProvider):
                            'already exists. Skipping.')
             return
         logger.info(f'Creating SkyPilot cluster {cluster_name}')
-        cmd = ['sky', 'launch', self.task_yaml_path, '-c', cluster_name, '-y']
+        if self.regions:
+            random_region = random.choice(self.regions)
+            cmd = ['sky', 'launch', self.task_yaml_path, '-c', cluster_name, '--region', random_region, '-y']
+            print('Randomly chosen region: ', random_region, flush=True)
+        else:
+            cmd = ['sky', 'launch', self.task_yaml_path, '-c', cluster_name, '-y']
         cmd.extend(['--detach-setup', '--detach-run', '--retry-until-up'])
         fn = serve_utils.generate_replica_launch_log_file_name(
             self.service_name, replica_id)

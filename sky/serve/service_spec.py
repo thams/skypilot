@@ -2,7 +2,7 @@
 import json
 import os
 import textwrap
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -27,6 +27,7 @@ class SkyServiceSpec:
         post_data: Optional[Dict[str, Any]] = None,
         controller_resources: Optional[Dict[str, Any]] = None,
         auto_restart: bool = False,
+        regions: Optional[List[str]] = None,
     ):
         if min_replicas < 0:
             with ux_utils.print_exception_no_traceback():
@@ -56,7 +57,9 @@ class SkyServiceSpec:
         self._post_data = post_data
         self._controller_resources = controller_resources
         self._auto_restart = auto_restart
-
+        self._regions = regions
+        print(regions, flush=True)
+        
     @staticmethod
     def from_yaml_config(config: Optional[Dict[str, Any]]):
         if config is None:
@@ -123,7 +126,8 @@ class SkyServiceSpec:
 
         service_config['controller_resources'] = config.pop(
             'controller_resources', None)
-
+        service_config['regions'] = config.pop('regions', None)
+        
         return SkyServiceSpec(**service_config)
 
     @staticmethod
@@ -174,6 +178,7 @@ class SkyServiceSpec:
         add_if_not_none('replica_policy', 'auto_restart', self._auto_restart)
         add_if_not_none('controller_resources', None,
                         self._controller_resources)
+        add_if_not_none('regions', None, self._regions)
 
         return config
 
@@ -244,3 +249,7 @@ class SkyServiceSpec:
     @property
     def auto_restart(self) -> bool:
         return self._auto_restart
+    
+    @property
+    def regions(self) -> Optional[List[str]]:
+        return self._regions

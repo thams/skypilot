@@ -2,6 +2,7 @@ resources:
   cloud: gcp
   cpus: 2+
   use_spot: True
+  accelerators: L4
 
 workdir: sky/serve/examples/http_server
 
@@ -13,8 +14,9 @@ service:
   readiness_probe:
     path: /health
     initial_delay_seconds: 20
-  replicas: 6
+  replicas: 3
   controller_resources:
     cloud: gcp
-  zones: ['us-central1-b', 'us-central1-a', 'us-central1-c']
-  spot_policy: EagerFailover
+
+  spot_policy: SkymapFailover
+  zones: ['asia-south1-a', 'us-central1-a', 'us-east1-b', 'europe-west1-b']

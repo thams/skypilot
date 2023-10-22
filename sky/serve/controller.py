@@ -18,6 +18,7 @@ from sky import serve
 from sky import sky_logging
 from sky.serve import autoscalers
 from sky.serve import infra_providers
+from sky.serve import skymap_prober
 from sky.utils import env_options
 
 # Use the explicit logger name so that the logger is under the
@@ -134,6 +135,9 @@ if __name__ == '__main__':
     # are executed at the same time.
     authentication.get_or_generate_keys()
 
+    # ======== SkyMap Prober =========
+    _skymap_prober = skymap_prober.SkymapProber()
+
     # ======= Infra Provider =========
     service_spec = serve.SkyServiceSpec.from_yaml(args.task_yaml)
     resources = resources_lib.Resources.from_yaml(args.task_yaml)
@@ -141,6 +145,7 @@ if __name__ == '__main__':
         args.task_yaml,
         args.service_name,
         resources.use_spot,
+        skymap_probe=_skymap_prober,
         zones=service_spec.zones,
         spot_policy=service_spec.spot_policy,
         controller_port=args.controller_port,

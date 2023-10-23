@@ -15,10 +15,9 @@ import requests
 from sky import backends
 from sky import global_user_state
 from sky import status_lib
-from sky import task as task_lib
 from sky.serve import constants
 from sky.serve import serve_utils
-from sky.serve import skymap_prober
+from sky.serve import spot_placer as placer
 from sky.skylet import job_lib
 from sky.utils import env_options
 
@@ -57,14 +56,6 @@ class ProcessStatus(enum.Enum):
 
     # The process failed
     FAILED = 'FAILED'
-
-
-class SpotPolicy(enum.Enum):
-
-    SINGLE_ZONE = 'SingleZone'
-    NAIVE_SPREAD = 'NaiveSpread'
-    EAGER_FAILOVER = 'EagerFailover'
-    SKYMAP_FAILOVER = 'SkymapFailover'
 
 
 class ReplicaStatusProperty:
@@ -262,46 +253,20 @@ class InfraProvider:
 class SkyPilotInfraProvider(InfraProvider):
     """Infra provider for SkyPilot clusters."""
 
-    def __init__(self,
-                 task_yaml_path: str,
-                 service_name: str,
-                 use_spot: bool,
-                 skymap_probe: skymap_prober.SkymapProber,
-                 *args,
-                 zones: Optional[List[str]] = None,
-                 spot_policy: Optional[str] = None,
-                 **kwargs) -> None:
+    def __init__(self, task_yaml_path: str, service_name: str, use_spot: bool,
+                 spot_placer: placer.SpotPlacer, zones: Optional[List[str]],
+                 *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.task_yaml_path: str = task_yaml_path
         self.service_name: str = service_name
         self.use_spot: bool = use_spot
-        self.zones: Optional[List[str]] = zones
-        self.current_zone_idx: int = 0
-        self.last_zone: str = ''
         self.next_replica_id: int = 1
-        self.preempted_zones: List[str] = []
-        self.zone_timeout_cnt: int = 0
-        self.zone_timeout_interval: int = 600
-        self.skymap_prober = skymap_probe
+        self.spot_placer = spot_placer
         self.launch_process_pool: serve_utils.ThreadSafeDict[
             str, subprocess.Popen] = serve_utils.ThreadSafeDict()
         self.down_process_pool: serve_utils.ThreadSafeDict[
             str, subprocess.Popen] = serve_utils.ThreadSafeDict()
-        self.task = task_lib.Task.from_yaml(self.task_yaml_path)
-        self.cloud = f'{list(self.task.resources)[0].cloud}'
-        assert isinstance(list(self.task.resources)[0].accelerators, dict)
-        self.accelerators = list(
-            list(self.task.resources)[0].accelerators.keys())[0]
-        if spot_policy == 'NaiveSpread':
-            self.spot_policy = SpotPolicy.NAIVE_SPREAD
-        elif spot_policy == 'EagerFailover':
-            self.spot_policy = SpotPolicy.EAGER_FAILOVER
-        elif spot_policy == 'SingleZone':
-            self.spot_policy = SpotPolicy.SINGLE_ZONE
-        elif spot_policy == 'SkymapFailover':
-            self.spot_policy = SpotPolicy.SKYMAP_FAILOVER
-        print('SkyPilotInfraProvider', zones, flush=True)
-
+        self.zones = zones
         self._start_process_pool_refresher()
         self._start_job_status_fetcher()
 
@@ -455,31 +420,6 @@ class SkyPilotInfraProvider(InfraProvider):
                 ready_replicas.add(info.ip)
         return ready_replicas
 
-    def _get_next_zone(self) -> str:
-        assert self.zones is not None
-        if self.spot_policy == SpotPolicy.NAIVE_SPREAD:
-            zone = self.zones[self.current_zone_idx]
-            self.current_zone_idx += 1
-        elif self.spot_policy == SpotPolicy.EAGER_FAILOVER:
-            zone = random.choice(self.zones)
-            while zone in self.preempted_zones:
-                zone = random.choice(self.zones)
-            logger.info(f'self.preempted_zones: {self.preempted_zones}')
-        elif self.spot_policy == SpotPolicy.SINGLE_ZONE:
-            if self.last_zone:
-                zone = self.last_zone
-            else:
-                zone = random.choice(self.zones)
-                self.last_zone = zone
-        elif self.spot_policy == SpotPolicy.SKYMAP_FAILOVER:
-            zone = random.choice(self.zones)
-            while zone in self.preempted_zones or self.skymap_prober.probe(
-                    self.cloud, zone,
-                    self.accelerators) == skymap_prober.ProbeStatus.UNAVAILABLE:
-                zone = random.choice(self.zones)
-            logger.info(f'self.preempted_zones: {self.preempted_zones}')
-        return zone
-
     def _launch_cluster(self, replica_id: int) -> None:
         cluster_name = serve_utils.generate_replica_cluster_name(
             self.service_name, replica_id)
@@ -489,18 +429,19 @@ class SkyPilotInfraProvider(InfraProvider):
             return
         logger.info(f'Creating SkyPilot cluster {cluster_name}')
         zone = ''
-        if self.zones:
-            zone = self._get_next_zone()
+        if self.spot_placer.active:
+            zone = self.spot_placer.get_next_zone()
             cmd = [
                 'sky', 'launch', self.task_yaml_path, '-c', cluster_name,
-                '--zone', zone, '-y'
+                '--zone', zone, '-y',
+                self.spot_placer.get_next_use_spot()
             ]
-            print('Chosen zone: ', zone, flush=True)
+            logger.info(f'Chosen zone: {zone}')
         else:
             cmd = [
                 'sky', 'launch', self.task_yaml_path, '-c', cluster_name, '-y'
             ]
-        if self.zones:
+        if self.spot_placer.active:
             # Let SkyPilotInfraProvider handle retry
             cmd.extend(['--detach-setup', '--detach-run'])
         else:
@@ -575,9 +516,7 @@ class SkyPilotInfraProvider(InfraProvider):
     def _recover_from_preemption(self, cluster_name: str) -> None:
         logger.info(f'Beginning recovery for preempted cluster {cluster_name}.')
         self.replica_info[cluster_name].status_property.preempted = True
-        self.preempted_zones.append(self.replica_info[cluster_name].zone)
-        if self.zones and len(self.preempted_zones) == len(self.zones):
-            self.preempted_zones.pop(0)
+        self.spot_placer.handle_preemption(self.replica_info[cluster_name].zone)
         # Logs are not synced because the cluster is no longer up.
         self._teardown_cluster(cluster_name, sync_down_logs=False)
 
@@ -669,15 +608,7 @@ class SkyPilotInfraProvider(InfraProvider):
         replica_info = self.get_replica_info(
             verbose=env_options.Options.SHOW_DEBUG_INFO.get())
         logger.info(f'All replica info: {replica_info}')
-
-        if self.zone_timeout_cnt == self.zone_timeout_interval:
-            if self.preempted_zones:
-                self.preempted_zones.pop(0)
-            logger.info(f'Pop self.preempted_zones: {self.preempted_zones}')
-            self.zone_timeout_cnt = 0
-
-        self.zone_timeout_cnt += 1
-        logger.info(f'self.zone_timeout_cnt: {self.zone_timeout_cnt}')
+        self.spot_placer.handle_heartbeat()
 
         def _probe_replica(info: ReplicaInfo) -> Tuple[str, bool]:
             replica_ip = info.ip

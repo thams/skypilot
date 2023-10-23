@@ -1,13 +1,14 @@
 resources:
   cloud: gcp
-  cpus: 2+
   use_spot: True
-  accelerators: L4
+  accelerators: V100
 
 workdir: sky/serve/examples/http_server
 
 # Use 8080 to test jupyter service is terminated
-run: python3 server.py --port 8080
+run: |
+  nvidia-smi
+  python3 server.py --port 8080
 
 service:
   port: 8080
@@ -19,4 +20,4 @@ service:
     cloud: gcp
 
   spot_policy: SkymapFailover
-  zones: ['asia-south1-a', 'us-central1-a', 'us-east1-b', 'europe-west1-b']
+  zones: ['us-east1-c', 'us-central1-a', 'europe-west4-c', 'asia-east1-c']

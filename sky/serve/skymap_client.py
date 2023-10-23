@@ -1,4 +1,4 @@
-""" Sky Map prober for SkyServe."""
+""" Sky Map Client for SkyServe."""
 import enum
 import logging
 
@@ -12,8 +12,8 @@ class ProbeStatus(enum.Enum):
     UNAVAILABLE = 0
     AVAILABLE = 1
 
-class SkymapProber:
-    """Skymap Prober specification."""
+class SkymapClient:
+    """Skymap Client specification."""
 
     URL = 'https://bluo.short.gy/skymap/predict-data'
 

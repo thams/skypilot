@@ -430,13 +430,12 @@ class SkyPilotInfraProvider(InfraProvider):
         logger.info(f'Creating SkyPilot cluster {cluster_name}')
         zone = ''
         if self.spot_placer.active:
-            zone = self.spot_placer.get_next_zone()
             cmd = [
                 'sky', 'launch', self.task_yaml_path, '-c', cluster_name,
-                '--zone', zone, '-y',
-                self.spot_placer.get_next_use_spot()
+                '--zone',
+                self.spot_placer.get_next_zone(),
+                self.spot_placer.get_next_use_spot(), '-y'
             ]
-            logger.info(f'Chosen zone: {zone}')
         else:
             cmd = [
                 'sky', 'launch', self.task_yaml_path, '-c', cluster_name, '-y'

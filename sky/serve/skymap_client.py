@@ -6,11 +6,13 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+
 class ProbeStatus(enum.Enum):
     """Process status."""
     NO_DATA = -1
     UNAVAILABLE = 0
     AVAILABLE = 1
+
 
 class SkymapClient:
     """Skymap Client specification."""
@@ -30,9 +32,7 @@ class SkymapClient:
         }
         logger.info(f'SkyMap request: {request_json}')
         try:
-            response = requests.post(self.URL,
-                                    json=request_json,
-                                    timeout=2)
+            response = requests.post(self.URL, json=request_json, timeout=2)
             if response.json()['count'] == 0:
                 return_status = ProbeStatus.UNAVAILABLE
             elif response.json()['count'] > 0:

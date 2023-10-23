@@ -9,6 +9,7 @@ from sky.serve import skymap_client as map_client
 
 logger = logging.getLogger(__name__)
 
+
 class SpotPolicy(enum.Enum):
 
     SINGLE_ZONE = 'SingleZone'
@@ -16,13 +17,11 @@ class SpotPolicy(enum.Enum):
     EAGER_FAILOVER = 'EagerFailover'
     SKYMAP_FAILOVER = 'SkymapFailover'
 
-class SpotPlacer:
 
+class SpotPlacer:
     """Spot Placer specification."""
-    def __init__(self,
-                 zones: List[str],
-                 spot_policy: str,
-                 use_spot: bool,
+
+    def __init__(self, zones: List[str], spot_policy: str, use_spot: bool,
                  task_yaml_path: str,
                  skymap_client: map_client.SkymapClient) -> None:
 
@@ -74,6 +73,7 @@ class SpotPlacer:
                     self.accelerators) == map_client.ProbeStatus.UNAVAILABLE:
                 zone = random.choice(self.zones)
             logger.info(f'self.preempted_zones: {self.preempted_zones}')
+        logger.info(f'Chosen zone: {zone}')
         return zone
 
     def get_next_use_spot(self) -> str:

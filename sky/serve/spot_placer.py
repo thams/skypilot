@@ -40,7 +40,7 @@ class SpotPlacer:
         self.current_zone_idx: int = 0
         self.single_zone: str = ''
         self.zone_timeout_cnt: int = 0
-        self.zone_timeout_interval: int = 600
+        self.zone_timeout_interval: int = 100
         self.skymap_client = skymap_client
         self.use_spot = use_spot
         self.preempted_zones: List[str] = []

@@ -75,6 +75,9 @@ class SpotPlacer:
                                                      self.use_spot)
             while zone in self.preempted_zones or skymap_status == map_client.ProbeStatus.UNAVAILABLE:  # pylint: disable=line-too-long
                 zone = random.choice(self.zones)
+                skymap_status = self.skymap_client.probe(self.cloud, zone,
+                                                     self.accelerators,
+                                                     self.use_spot)
             logger.info(f'self.preempted_zones: {self.preempted_zones}')
         logger.info(f'Chosen zone: {zone}, policy: {self.spot_policy}')
         return zone

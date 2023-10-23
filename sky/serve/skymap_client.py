@@ -28,7 +28,7 @@ class SkymapClient:
         request_json = {
             'cloud': cloud,
             'zone': zone,
-            'accelerator': accelerator,
+            'accelerators': accelerator,
             'use_spot': use_spot
         }
         logger.info(f'SkyMap request: {request_json}')

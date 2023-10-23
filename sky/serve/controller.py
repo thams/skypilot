@@ -136,7 +136,7 @@ if __name__ == '__main__':
     # are executed at the same time.
     authentication.get_or_generate_keys()
 
-    # ======== SkyMap Prober =========
+    # ======== SkyMap Client =========
     _skymap_client = skymap_client.SkymapClient()
 
     # ======= Infra Provider =========

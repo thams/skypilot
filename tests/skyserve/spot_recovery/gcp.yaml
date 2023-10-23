@@ -1,7 +1,7 @@
 resources:
   cloud: gcp
   use_spot: True
-  accelerators: L4:2
+  accelerators: L4:4
 
 workdir: sky/serve/examples/http_server
 
@@ -15,10 +15,13 @@ service:
   readiness_probe:
     path: /health
     initial_delay_seconds: 20
-  replicas: 3
   controller_resources:
     cloud: gcp
+  replica_policy:
+    min_replicas: 3
+    max_replicas: 3
+    auto_restart: true
 
   spot_policy: SkymapFailover
   # zones: ['us-east1-c', 'us-central1-a', 'europe-west4-c', 'asia-east1-c']
-  zones: ['us-central1-a', 'europe-west2-b', 'asia-south1-a']
+  zones: ['asia-south1-a', 'us-central1-a', 'us-east1-b']

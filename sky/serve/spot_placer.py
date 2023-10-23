@@ -68,12 +68,13 @@ class SpotPlacer:
             logger.info(f'self.preempted_zones: {self.preempted_zones}')
         elif self.spot_policy == SpotPolicy.SKYMAP_FAILOVER:
             zone = random.choice(self.zones)
-            while zone in self.preempted_zones or self.skymap_client.probe(
-                    self.cloud, zone,
-                    self.accelerators) == map_client.ProbeStatus.UNAVAILABLE:
+            skymap_status = self.skymap_client.probe(self.cloud, zone,
+                                                     self.accelerators,
+                                                     self.use_spot)
+            while zone in self.preempted_zones or skymap_status == map_client.ProbeStatus.UNAVAILABLE:  # pylint: disable=line-too-long
                 zone = random.choice(self.zones)
             logger.info(f'self.preempted_zones: {self.preempted_zones}')
-        logger.info(f'Chosen zone: {zone}')
+        logger.info(f'Chosen zone: {zone}, policy: {self.spot_policy}')
         return zone
 
     def get_next_use_spot(self) -> str:
@@ -84,6 +85,7 @@ class SpotPlacer:
             return '--no-use-spot'
 
     def handle_preemption(self, zone):
+        logger.info(f'handle_preemption: {zone}')
         self.preempted_zones.append(zone)
         if self.zones and len(self.preempted_zones) == len(self.zones):
             self.preempted_zones.pop(0)
@@ -100,5 +102,4 @@ class SpotPlacer:
 
     @property
     def active(self) -> bool:
-        return self.zones and self.use_spot
-
+        return self.zones is not None and self.use_spot

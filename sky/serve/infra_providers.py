@@ -322,9 +322,21 @@ class SkyPilotInfraProvider(InfraProvider):
                         f'Cluster {cluster_name} removed from the replica info {removal_reason}.'  # pylint: disable=line-too-long
                     )
                 else:
-                    logger.info(f'Termination of cluster {cluster_name} '
-                                'finished. Replica info is kept since some '
-                                'failure detected.')
+                    # TODO(MaoZiming): Currently do not specify
+                    # -retry-until-up for spot.
+                    if self.use_spot and p.returncode == 0:
+                        self.spot_placer.handle_preemption(
+                            self.replica_info[cluster_name].zone)
+                        del self.replica_info[cluster_name]
+                        removal_reason = 'Region unavailable for spot instance'
+                        logger.info(
+                            f'Cluster {cluster_name} removed from the replica info {removal_reason}.'  # pylint: disable=line-too-long
+                        )
+
+                    else:
+                        logger.info(f'Termination of cluster {cluster_name} '
+                                    'finished. Replica info is kept since some '
+                                    'failure detected.')
 
     # TODO(tian): Maybe use decorator?
     def _process_pool_refresher(self) -> None:
@@ -430,10 +442,10 @@ class SkyPilotInfraProvider(InfraProvider):
         logger.info(f'Creating SkyPilot cluster {cluster_name}')
         zone = ''
         if self.spot_placer.active:
+            zone = self.spot_placer.get_next_zone()
             cmd = [
                 'sky', 'launch', self.task_yaml_path, '-c', cluster_name,
-                '--zone',
-                self.spot_placer.get_next_zone(),
+                '--zone', zone,
                 self.spot_placer.get_next_use_spot(), '-y'
             ]
         else:

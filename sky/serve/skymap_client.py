@@ -22,13 +22,14 @@ class SkymapClient:
     def __init__(self) -> None:
         pass
 
-    def probe(self, cloud, zone, accelerator) -> ProbeStatus:
+    def probe(self, cloud, zone, accelerator, use_spot) -> ProbeStatus:
 
         return_status = ProbeStatus.NO_DATA
         request_json = {
             'cloud': cloud,
             'zone': zone,
-            'accelerator': accelerator
+            'accelerator': accelerator,
+            'use_spot': use_spot
         }
         logger.info(f'SkyMap request: {request_json}')
         try:

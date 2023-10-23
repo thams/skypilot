@@ -101,6 +101,6 @@ class SpotPlacer:
     @property
     def active(self) -> bool:
         if self.zones and self.use_spot:
-            return False
-        else:
             return True
+        else:
+            return False

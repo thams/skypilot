@@ -1,7 +1,7 @@
 resources:
   cloud: gcp
   use_spot: True
-  accelerators: V100
+  accelerators: L4:2
 
 workdir: sky/serve/examples/http_server
 
@@ -20,4 +20,5 @@ service:
     cloud: gcp
 
   spot_policy: SkymapFailover
-  zones: ['us-east1-c', 'us-central1-a', 'europe-west4-c', 'asia-east1-c']
+  # zones: ['us-east1-c', 'us-central1-a', 'europe-west4-c', 'asia-east1-c']
+  zones: ['us-central1-a', 'europe-west2-b', 'asia-south1-a']

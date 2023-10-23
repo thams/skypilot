@@ -515,7 +515,9 @@ class SkyPilotInfraProvider(InfraProvider):
     def _recover_from_preemption(self, cluster_name: str) -> None:
         logger.info(f'Beginning recovery for preempted cluster {cluster_name}.')
         self.replica_info[cluster_name].status_property.preempted = True
-        self.spot_placer.handle_preemption(self.replica_info[cluster_name].zone)
+        if self.spot_placer.active:
+            self.spot_placer.handle_preemption(
+                self.replica_info[cluster_name].zone)
         # Logs are not synced because the cluster is no longer up.
         self._teardown_cluster(cluster_name, sync_down_logs=False)
 
@@ -607,7 +609,8 @@ class SkyPilotInfraProvider(InfraProvider):
         replica_info = self.get_replica_info(
             verbose=env_options.Options.SHOW_DEBUG_INFO.get())
         logger.info(f'All replica info: {replica_info}')
-        self.spot_placer.handle_heartbeat()
+        if self.spot_placer.active:
+            self.spot_placer.handle_heartbeat()
 
         def _probe_replica(info: ReplicaInfo) -> Tuple[str, bool]:
             replica_ip = info.ip

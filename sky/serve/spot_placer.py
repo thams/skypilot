@@ -47,10 +47,12 @@ class SpotPlacer:
 
         self.task_yaml_path: str = task_yaml_path
         self.task = task_lib.Task.from_yaml(self.task_yaml_path)
-        self.cloud = f'{list(self.task.resources)[0].cloud}'
-        assert isinstance(list(self.task.resources)[0].accelerators, dict)
-        self.accelerators = list(
-            list(self.task.resources)[0].accelerators.keys())[0]
+        task_resource = list(self.task.resources)[0]
+        self.cloud = f'{task_resource.cloud}'
+        if task_resource and task_resource.accelerators:
+            assert isinstance(task_resource.accelerators, dict)
+            self.accelerators = list(
+                list(self.task.resources)[0].accelerators.keys())[0]
 
     def get_next_zone(self) -> str:
         assert self.zones is not None

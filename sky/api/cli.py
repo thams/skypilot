@@ -48,7 +48,7 @@ import sky
 from sky import backends
 from sky import check as sky_check
 from sky import clouds
-from sky import core
+from sky.api import sdk
 from sky import exceptions
 from sky import global_user_state
 from sky import sky_logging
@@ -832,9 +832,9 @@ def _launch_with_confirm(
         # We do not sky.launch if interactive node is already up, so we need
         # to update idle timeout and autodown here.
         elif idle_minutes_to_autostop is not None:
-            core.autostop(cluster, idle_minutes_to_autostop, down)
+            sdk.autostop(cluster, idle_minutes_to_autostop, down)
         elif down:
-            core.autostop(cluster, 1, down)
+            sdk.autostop(cluster, 1, down)
 
     elif not confirm_shown:
         click.secho(f'Running task on cluster {cluster}...', fg='yellow')
@@ -1619,7 +1619,7 @@ def _get_spot_jobs(
             usage_lib.messages.usage.set_internal()
         with sky_logging.silent():
             # Make the call silent
-            spot_jobs = core.spot_queue(refresh=refresh,
+            spot_jobs = sdk.spot_queue(refresh=refresh,
                                         skip_finished=skip_finished)
         num_in_progress_jobs = len(spot_jobs)
     except exceptions.ClusterNotUpError as e:
@@ -1767,7 +1767,7 @@ def status(all: bool, refresh: bool, ip: bool, show_spot_jobs: bool,
         query_clusters: Optional[List[str]] = None
         if clusters:
             query_clusters = _get_glob_clusters(clusters, silent=ip)
-        cluster_records = core.status(cluster_names=query_clusters,
+        cluster_records = sdk.status(cluster_names=query_clusters,
                                       refresh=refresh)
         if ip:
             if len(cluster_records) != 1:
@@ -1896,7 +1896,7 @@ def cost_report(all: bool):  # pylint: disable=redefined-builtin
 
     - Clusters that were terminated/stopped on the cloud console.
     """
-    cluster_records = core.cost_report()
+    cluster_records = sdk.cost_report()
 
     nonreserved_cluster_records = []
     reserved_clusters = dict()
@@ -1973,7 +1973,7 @@ def queue(clusters: List[str], skip_finished: bool, all_users: bool):
     unsupported_clusters = []
     for cluster in clusters:
         try:
-            job_table = core.queue(cluster, skip_finished, all_users)
+            job_table = sdk.queue(cluster, skip_finished, all_users)
         except (RuntimeError, ValueError, exceptions.NotSupportedError,
                 exceptions.ClusterNotUpError, exceptions.CloudUserIdentityError,
                 exceptions.ClusterOwnerIdentityMismatchError) as e:
@@ -2066,7 +2066,7 @@ def logs(
     job_ids = None if not job_ids else job_ids
 
     if sync_down:
-        core.download_logs(cluster, job_ids)
+        sdk.download_logs(cluster, job_ids)
         return
 
     assert job_ids is None or len(job_ids) <= 1, job_ids
@@ -2082,7 +2082,7 @@ def logs(
     else:
         job_ids_to_query = job_ids
     if status:
-        job_statuses = core.job_status(cluster, job_ids_to_query)
+        job_statuses = sdk.job_status(cluster, job_ids_to_query)
         job_id = list(job_statuses.keys())[0]
         # If job_ids is None and no job has been submitted to the cluster,
         # it will return {None: None}.
@@ -2100,7 +2100,7 @@ def logs(
                 click.secho(f'Job {id_str}not found', fg='red')
             sys.exit(1)
 
-    core.tail_logs(cluster, job_id, follow)
+    sdk.tail_logs(cluster, job_id, follow)
 
 
 @cli.command()
@@ -2170,7 +2170,7 @@ def cancel(cluster: str, all: bool, jobs: List[int], yes: bool):  # pylint: disa
                       show_default=True)
 
     try:
-        core.cancel(cluster, all=all, job_ids=job_ids_to_cancel)
+        sdk.cancel(cluster, all=all, job_ids=job_ids_to_cancel)
     except exceptions.NotSupportedError:
         # Friendly message for usage like 'sky cancel <spot controller> -a/<job
         # id>'.
@@ -2570,7 +2570,7 @@ def start(
 
     for name in to_start:
         try:
-            core.start(name,
+            sdk.start(name,
                        idle_minutes_to_autostop,
                        retry_until_up,
                        down=down,
@@ -2679,7 +2679,7 @@ def _hint_or_raise_for_down_spot_controller(controller_name: str):
         with rich_utils.safe_status(
                 '[bold cyan]Checking for in-progress spot jobs[/]'):
             try:
-                spot_jobs = core.spot_queue(refresh=False)
+                spot_jobs = sdk.spot_queue(refresh=False)
             except exceptions.ClusterNotUpError:
                 # The spot controller cluster status changed during querying
                 # the spot jobs, use the latest cluster status, so that the
@@ -2855,7 +2855,7 @@ def _down_or_stop_clusters(
         success_progress = False
         if idle_minutes_to_autostop is not None:
             try:
-                core.autostop(name, idle_minutes_to_autostop, down)
+                sdk.autostop(name, idle_minutes_to_autostop, down)
             except (exceptions.NotSupportedError,
                     exceptions.ClusterNotUpError) as e:
                 message = str(e)
@@ -2878,9 +2878,9 @@ def _down_or_stop_clusters(
         else:
             try:
                 if down:
-                    core.down(name, purge=purge)
+                    sdk.down(name, purge=purge)
                 else:
-                    core.stop(name, purge=purge)
+                    sdk.stop(name, purge=purge)
             except RuntimeError as e:
                 message = (
                     f'{colorama.Fore.RED}{operation} cluster {name}...failed. '
@@ -3890,7 +3890,7 @@ def spot_cancel(name: Optional[str], job_ids: Tuple[int], all: bool, yes: bool):
                       abort=True,
                       show_default=True)
 
-    core.spot_cancel(job_ids=job_ids, name=name, all=all)
+    sdk.spot_cancel(job_ids=job_ids, name=name, all=all)
 
 
 @spot.command('logs', cls=_DocumentedCodeCommand)
@@ -3918,11 +3918,11 @@ def spot_logs(name: Optional[str], job_id: Optional[int], follow: bool,
     """Tail the log of a managed spot job."""
     try:
         if controller:
-            core.tail_logs(spot_lib.SPOT_CONTROLLER_NAME,
+            sdk.tail_logs(spot_lib.SPOT_CONTROLLER_NAME,
                            job_id=job_id,
                            follow=follow)
         else:
-            core.spot_tail_logs(name=name, job_id=job_id, follow=follow)
+            sdk.spot_tail_logs(name=name, job_id=job_id, follow=follow)
     except exceptions.ClusterNotUpError:
         # Hint messages already printed by the call above.
         sys.exit(1)

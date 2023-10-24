@@ -25,8 +25,12 @@ from sky.utils import subprocess_utils
 from sky.utils import tpu_utils
 from sky.utils import ux_utils
 
-if typing.TYPE_CHECKING:
-    import sky
+try:
+    import fastapi
+    app_router = fastapi.APIRouter()
+except ImportError:
+    app_router = None
+
 
 logger = sky_logging.init_logger(__name__)
 
@@ -34,8 +38,14 @@ logger = sky_logging.init_logger(__name__)
 # = Cluster Management =
 # ======================
 
+def router(name, *args, **kwargs):
+    """Decorator for adding a function to the API router."""
+    if app_router is None:
+        return lambda func: func
+    return getattr(app_router, name)(*args, **kwargs)
 
 @usage_lib.entrypoint
+@router('get', '/status')
 def status(cluster_names: Optional[Union[str, List[str]]] = None,
            refresh: bool = False) -> List[Dict[str, Any]]:
     # NOTE(dev): Keep the docstring consistent between the Python API and CLI.

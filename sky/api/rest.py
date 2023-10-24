@@ -1,15 +1,16 @@
-from typing import Optional
+import pickle
+from typing import Optional, List, Dict, Any
 
 import fastapi
 import pydantic
 import yaml
 
 import sky
-from sky.api import sdk
+from sky import core
 from sky import execution
 from sky import optimizer
 
-app = fastapi.FastAPI(root_path='/api/v1', debug=True)
+app = fastapi.FastAPI(prefix='/api/v1', debug=True)
 
 class LaunchBody(pydantic.BaseModel):
     task: str
@@ -56,8 +57,59 @@ async def launch(
         _is_launched_by_spot_controller=launch_body._is_launched_by_spot_controller,
     )
 
+class StatusBody(pydantic.BaseModel):
+    cluster_names: Optional[List[str]] = None
+    refresh: bool = False
 
-app.include_router(sdk.app_router)
+class StatusReturn(pydantic.BaseModel):
+    name: str
+    launched_at: Optional[int] = None
+    last_use: Optional[str] = None
+    status: Optional[sky.ClusterStatus] = None
+    handle: Optional[dict] = None
+    autostop: int
+    to_down: bool
+    metadata: Dict[str, Any]
+
+
+@app.get('/status')
+async def status(status_body: StatusBody = StatusBody()) -> List[StatusReturn]:
+    clusters = core.status(
+        cluster_names=status_body.cluster_names,
+        refresh=status_body.refresh,
+    )
+    status_returns = []
+    for cluster in clusters:
+        status_returns.append(StatusReturn(
+            name=cluster['name'],
+            launched_at=cluster['launched_at'],
+            last_use=cluster['last_use'],
+            handle=cluster['handle'].to_config(),
+            status=cluster['status'],
+            autostop=cluster['autostop'],
+            to_down=cluster['to_down'],
+            metadata=cluster['metadata'],
+        ))
+    return status_returns
+
+
+class DownBody(pydantic.BaseModel):
+    cluster_names: List[str] =  []
+    purge: bool = False
+
+
+@app.post('/down')
+async def down(down_body: DownBody):
+    for cluster_name in down_body.cluster_names:
+        core.down(cluster_name=cluster_name, purge=down_body.purge)
+
+@app.get('/health')
+async def health() -> str:
+    return 'OK'
+
+
+
+app.include_router(core.app_router)
 
 if __name__ == '__main__':
     import uvicorn

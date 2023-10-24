@@ -2,6 +2,7 @@
 import enum
 import logging
 import random
+import time
 from typing import List
 
 from sky import task as task_lib
@@ -78,6 +79,7 @@ class SpotPlacer:
                 skymap_status = self.skymap_client.probe(self.cloud, zone,
                                                      self.accelerators,
                                                      self.use_spot)
+                time.sleep(1)
             logger.info(f'self.preempted_zones: {self.preempted_zones}')
         logger.info(f'Chosen zone: {zone}, policy: {self.spot_policy}')
         return zone

@@ -2,6 +2,7 @@
 import asyncio
 import multiprocessing
 import sys
+import tempfile
 from typing import Any, Callable, Dict, List, Optional
 import uuid
 
@@ -9,13 +10,14 @@ import colorama
 import fastapi
 import pydantic
 import starlette.middleware.base
-import yaml
 
 import sky
 from sky import core
 from sky import execution
 from sky import optimizer
 from sky.api import rest_utils
+from sky.utils import dag_utils
+from sky.utils import registry
 from sky.utils import subprocess_utils
 
 # pylint: disable=ungrouped-imports
@@ -108,6 +110,7 @@ class LaunchBody(pydantic.BaseModel):
     idle_minutes_to_autostop: Optional[int] = None
     dryrun: bool = False
     down: bool = False
+    backend: Optional[str] = None
     optimize_target: optimizer.OptimizeTarget = optimizer.OptimizeTarget.COST
     detach_setup: bool = False
     no_setup: bool = False
@@ -124,20 +127,24 @@ async def launch(launch_body: LaunchBody, request: fastapi.Request):
     Args:
         task: The YAML string of the task to launch.
     """
-    task_config = yaml.safe_load(launch_body.task)
-    skypilot_task = sky.Task.from_yaml_config(task_config)
+    with tempfile.NamedTemporaryFile(mode='w') as f:
+        f.write(launch_body.task)
+        f.flush()
+        dag = dag_utils.load_chain_dag_from_yaml(f.name)
 
+    backend = registry.BACKEND_REGISTRY.from_str(launch_body.backend)
     request_id = request.state.request_id
     _start_background_request(
         request_id,
         request_name='launch',
         func=execution.launch,
-        task=skypilot_task,
+        task=dag,
         cluster_name=launch_body.cluster_name,
         retry_until_up=launch_body.retry_until_up,
         idle_minutes_to_autostop=launch_body.idle_minutes_to_autostop,
         dryrun=launch_body.dryrun,
         down=launch_body.down,
+        backend=backend,
         optimize_target=launch_body.optimize_target,
         detach_setup=launch_body.detach_setup,
         detach_run=True,
@@ -192,9 +199,10 @@ class DownBody(pydantic.BaseModel):
 
 
 @app.post('/down')
-async def down(down_body: DownBody, request: fastapi.Request):
+async def down(down_body: DownBody):
     for cluster_name in down_body.cluster_names:
         # TODO(zhwu): Make core down take a list of cluster names.
+        # Also, make this async.
         core.down(cluster_name=cluster_name, purge=down_body.purge)
 
 

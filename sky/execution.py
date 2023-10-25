@@ -38,52 +38,6 @@ from sky.utils import ux_utils
 
 logger = sky_logging.init_logger(__name__)
 
-# Message thrown when APIs sky.{exec,launch,spot_launch}() received a string
-# instead of a Dag.  CLI (cli.py) is implemented by us so should not trigger
-# this.
-_ENTRYPOINT_STRING_AS_DAG_MESSAGE = """\
-Expected a sky.Task or sky.Dag but received a string.
-
-If you meant to run a command, make it a Task's run command:
-
-    task = sky.Task(run=command)
-
-The command can then be run as:
-
-  sky.exec(task, cluster_name=..., ...)
-  # Or use {'V100': 1}, 'V100:0.5', etc.
-  task.set_resources(sky.Resources(accelerators='V100:1'))
-  sky.exec(task, cluster_name=..., ...)
-
-  sky.launch(task, ...)
-
-  sky.spot_launch(task, ...)
-""".strip()
-
-
-def _convert_to_dag(entrypoint: Any) -> 'sky.Dag':
-    """Convert the entrypoint to a sky.Dag.
-
-    Raises TypeError if 'entrypoint' is not a 'sky.Task' or 'sky.Dag'.
-    """
-    # Not suppressing stacktrace: when calling this via API user may want to
-    # see their own program in the stacktrace. Our CLI impl would not trigger
-    # these errors.
-    if isinstance(entrypoint, str):
-        raise TypeError(_ENTRYPOINT_STRING_AS_DAG_MESSAGE)
-    elif isinstance(entrypoint, sky.Dag):
-        return copy.deepcopy(entrypoint)
-    elif isinstance(entrypoint, task_lib.Task):
-        entrypoint = copy.deepcopy(entrypoint)
-        with sky.Dag() as dag:
-            dag.add(entrypoint)
-            dag.name = entrypoint.name
-        return dag
-    else:
-        raise TypeError(
-            'Expected a sky.Task or sky.Dag but received argument of type: '
-            f'{type(entrypoint)}')
-
 
 class Stage(enum.Enum):
     """Stages for a run of a sky.Task."""
@@ -206,7 +160,7 @@ def _execute(
         autostop after this many minutes of idleness.
       no_setup: bool; whether to skip setup commands or not when (re-)launching.
     """
-    dag = _convert_to_dag(entrypoint)
+    dag = dag_utils.convert_entrypoint_to_dag(entrypoint)
     assert len(dag) == 1, f'We support 1 task for now. {dag}'
     task = dag.tasks[0]
 
@@ -605,7 +559,7 @@ def spot_launch(
     entrypoint = task
     dag_uuid = str(uuid.uuid4().hex[:4])
 
-    dag = _convert_to_dag(entrypoint)
+    dag = dag_utils.convert_entrypoint_to_dag(entrypoint)
     assert dag.is_chain(), ('Only single-task or chain DAG is '
                             'allowed for spot_launch.', dag)
 

@@ -69,6 +69,7 @@ from sky.utils import dag_utils
 from sky.utils import env_options
 from sky.utils import kubernetes_utils
 from sky.utils import log_utils
+from sky.utils import registry
 from sky.utils import rich_utils
 from sky.utils import schemas
 from sky.utils import status_lib
@@ -654,7 +655,7 @@ def _parse_override_params(
         if cloud.lower() == 'none':
             override_params['cloud'] = None
         else:
-            override_params['cloud'] = clouds.CLOUD_REGISTRY.from_str(cloud)
+            override_params['cloud'] = registry.CLOUD_REGISTRY.from_str(cloud)
     if region is not None:
         if region.lower() == 'none':
             override_params['region'] = None
@@ -2966,7 +2967,7 @@ def gpunode(cluster: str, yes: bool, port_forward: Optional[List[int]],
                                     cpus is None and memory is None and
                                     gpus is None and use_spot is None)
     default_resources = _INTERACTIVE_NODE_DEFAULT_RESOURCES['gpunode']
-    cloud_provider = clouds.CLOUD_REGISTRY.from_str(cloud)
+    cloud_provider = registry.CLOUD_REGISTRY.from_str(cloud)
     if gpus is None and instance_type is None:
         # Use this request if both gpus and instance_type are not specified.
         gpus = default_resources.accelerators
@@ -3050,7 +3051,7 @@ def cpunode(cluster: str, yes: bool, port_forward: Optional[List[int]],
                                     cpus is None and memory is None and
                                     use_spot is None)
     default_resources = _INTERACTIVE_NODE_DEFAULT_RESOURCES['cpunode']
-    cloud_provider = clouds.CLOUD_REGISTRY.from_str(cloud)
+    cloud_provider = registry.CLOUD_REGISTRY.from_str(cloud)
     if instance_type is None:
         instance_type = default_resources.instance_type
     if use_spot is None:
@@ -3244,7 +3245,7 @@ def show_gpus(
         raise click.UsageError(
             'The --region flag is only valid when the --cloud flag is set.')
     # This will validate 'cloud' and raise if not found.
-    clouds.CLOUD_REGISTRY.from_str(cloud)
+    registry.CLOUD_REGISTRY.from_str(cloud)
     service_catalog.validate_region_zone(region, None, clouds=cloud)
     show_all = all
     if show_all and accelerator_str is not None:

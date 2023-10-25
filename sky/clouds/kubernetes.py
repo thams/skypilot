@@ -11,6 +11,7 @@ from sky.adaptors import kubernetes
 from sky.clouds import service_catalog
 from sky.utils import common_utils
 from sky.utils import kubernetes_utils
+from sky.utils import registry
 from sky.utils import status_lib
 from sky.utils import ux_utils
 
@@ -23,7 +24,7 @@ logger = sky_logging.init_logger(__name__)
 CREDENTIAL_PATH = '~/.kube/config'
 
 
-@clouds.CLOUD_REGISTRY.register
+@registry.CLOUD_REGISTRY.register
 class Kubernetes(clouds.Cloud):
     """Kubernetes."""
 

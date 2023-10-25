@@ -89,4 +89,8 @@ USER_ID_ENV_VAR = 'SKYPILOT_USER_ID'
 CLUSTER_NAME_VALID_REGEX = '[a-z]([-a-z0-9]*[a-z0-9])?'
 
 # The log for SkyPilot API server.
-SKY_SERVER_LOGS = '~/.sky/api_server.log'
+API_SERVER_LOGS = '~/.sky/api_server.log'
+
+# The name for the environment variable that stores the URL of the SkyPilot
+# API server.
+SKY_API_SERVER_URL_ENV_VAR = 'SKYPILOT_API_SERVER_URL'

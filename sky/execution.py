@@ -544,7 +544,7 @@ def spot_launch(
     # NOTE(dev): Keep the docstring consistent between the Python API and CLI.
     """Launch a managed spot job.
 
-    Please refer to the sky.cli.spot_launch for the document.
+    Please refer to the sky.api.cli.spot_launch for the document.
 
     Args:
         task: sky.Task, or sky.Dag (experimental; 1-task only) to launch as a

@@ -2048,7 +2048,7 @@ def queue(clusters: List[str], skip_finished: bool, all_users: bool):
 @usage_lib.entrypoint
 def logs(
     cluster: str,
-    job_ids: Tuple[str],
+    job_ids: Optional[Tuple[str, ...]],
     sync_down: bool,
     status: bool,  # pylint: disable=redefined-outer-name
     follow: bool,
@@ -2074,7 +2074,7 @@ def logs(
             'Both --sync_down and --status are specified '
             '(ambiguous). To fix: specify at most one of them.')
 
-    if len(job_ids) > 1 and not sync_down:
+    if job_ids and not sync_down:
         raise click.UsageError(
             f'Cannot stream logs of multiple jobs (IDs: {", ".join(job_ids)}).'
             '\nPass -s/--sync-down to download the logs instead.')
@@ -2090,11 +2090,11 @@ def logs(
     if job_ids:
         # Already check that len(job_ids) <= 1. This variable is used later
         # in core.tail_logs.
-        job_id = job_ids[0]
-        if not job_id.isdigit():
+        if not job_ids[0].isdigit():
             raise click.UsageError(f'Invalid job ID {job_id}. '
                                    'Job ID must be integers.')
-        job_ids_to_query = [int(job_id)]
+        job_id = int(job_ids[0])
+        job_ids_to_query: Optional[Tuple[str, ...]] = (job_ids[0],)
     else:
         job_ids_to_query = job_ids
     if status:

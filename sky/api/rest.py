@@ -12,12 +12,10 @@ import fastapi
 import pydantic
 import starlette.middleware.base
 
-import sky
 from sky import core
 from sky import execution
 from sky import optimizer
 from sky.api import request_tasks
-from sky.api import request_return_encoders
 from sky.utils import dag_utils
 from sky.utils import registry
 from sky.utils import subprocess_utils
@@ -85,9 +83,10 @@ def wrapper(func: Callable[P, Any], request_id: str, *args: P.args,
     return return_value
 
 
-def _start_background_request(request_id: str, request_name: str, request_body: Dict[str, Any],
-                              func: Callable[P, Any], *args: P.args,
-                              **kwargs: P.kwargs):
+def _start_background_request(request_id: str, request_name: str,
+                              request_body: Dict[str, Any], func: Callable[P,
+                                                                           Any],
+                              *args: P.args, **kwargs: P.kwargs):
     """Start a task."""
     rest_task = request_tasks.RequestTask(
         request_id=request_id,
@@ -274,5 +273,8 @@ if __name__ == '__main__':
     parser.add_argument('--host', default='0.0.0.0')
     parser.add_argument('--port', default=8000, type=int)
     parser.add_argument('--reload', action='store_true')
-    args = parser.parse_args()
-    uvicorn.run('sky.api.rest:app', host=args.host, port=args.port, reload=args.reload)
+    cmd_args = parser.parse_args()
+    uvicorn.run('sky.api.rest:app',
+                host=cmd_args.host,
+                port=cmd_args.port,
+                reload=cmd_args.reload)

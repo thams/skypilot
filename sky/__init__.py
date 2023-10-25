@@ -10,6 +10,8 @@ __root_dir__ = os.path.dirname(os.path.abspath(__file__))
 from sky import backends
 from sky import benchmark
 from sky import clouds
+from sky.api.sdk import launch
+from sky.api.sdk import status
 from sky.clouds.service_catalog import list_accelerators
 from sky.core import autostop
 from sky.core import cancel
@@ -23,7 +25,6 @@ from sky.core import spot_queue
 from sky.core import spot_status
 from sky.core import spot_tail_logs
 from sky.core import start
-from sky.api.sdk import status
 from sky.core import stop
 from sky.core import storage_delete
 from sky.core import storage_ls
@@ -33,7 +34,6 @@ from sky.data import Storage
 from sky.data import StorageMode
 from sky.data import StoreType
 from sky.execution import exec  # pylint: disable=redefined-builtin
-from sky.api.sdk import launch
 from sky.execution import spot_launch
 from sky.optimizer import Optimizer
 from sky.optimizer import OptimizeTarget

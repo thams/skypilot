@@ -1,5 +1,7 @@
-import pickle
-from typing import Optional, List, Dict, Any
+import asyncio
+import multiprocessing
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 import fastapi
 import pydantic
@@ -11,6 +13,24 @@ from sky import execution
 from sky import optimizer
 
 app = fastapi.FastAPI(prefix='/api/v1', debug=True)
+
+
+async def update_cluster_status_event():
+    while True:
+        core.status(refresh=True)
+        await asyncio.sleep(10)
+
+
+events = [
+    update_cluster_status_event,
+]
+
+
+@app.on_event('startup')
+async def startup():
+    for event in events:
+        asyncio.create_task(event())
+
 
 class LaunchBody(pydantic.BaseModel):
     task: str
@@ -26,6 +46,7 @@ class LaunchBody(pydantic.BaseModel):
     # Internal only:
     # pylint: disable=invalid-name
     _is_launched_by_spot_controller: bool = False
+
 
 @app.post('/launch')
 async def launch(
@@ -54,12 +75,15 @@ async def launch(
         detach_run=True,
         no_setup=launch_body.no_setup,
         clone_disk_from=launch_body.clone_disk_from,
-        _is_launched_by_spot_controller=launch_body._is_launched_by_spot_controller,
+        _is_launched_by_spot_controller=launch_body.
+        _is_launched_by_spot_controller,
     )
+
 
 class StatusBody(pydantic.BaseModel):
     cluster_names: Optional[List[str]] = None
     refresh: bool = False
+
 
 class StatusReturn(pydantic.BaseModel):
     name: str
@@ -80,21 +104,22 @@ async def status(status_body: StatusBody = StatusBody()) -> List[StatusReturn]:
     )
     status_returns = []
     for cluster in clusters:
-        status_returns.append(StatusReturn(
-            name=cluster['name'],
-            launched_at=cluster['launched_at'],
-            last_use=cluster['last_use'],
-            handle=cluster['handle'].to_config(),
-            status=cluster['status'],
-            autostop=cluster['autostop'],
-            to_down=cluster['to_down'],
-            metadata=cluster['metadata'],
-        ))
+        status_returns.append(
+            StatusReturn(
+                name=cluster['name'],
+                launched_at=cluster['launched_at'],
+                last_use=cluster['last_use'],
+                handle=cluster['handle'].to_config(),
+                status=cluster['status'],
+                autostop=cluster['autostop'],
+                to_down=cluster['to_down'],
+                metadata=cluster['metadata'],
+            ))
     return status_returns
 
 
 class DownBody(pydantic.BaseModel):
-    cluster_names: List[str] =  []
+    cluster_names: List[str] = []
     purge: bool = False
 
 
@@ -103,10 +128,10 @@ async def down(down_body: DownBody):
     for cluster_name in down_body.cluster_names:
         core.down(cluster_name=cluster_name, purge=down_body.purge)
 
+
 @app.get('/health')
 async def health() -> str:
     return 'OK'
-
 
 
 app.include_router(core.app_router)

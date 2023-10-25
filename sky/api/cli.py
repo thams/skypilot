@@ -1783,8 +1783,9 @@ def status(all: bool, refresh: bool, ip: bool, show_spot_jobs: bool,
         query_clusters: Optional[List[str]] = None
         if clusters:
             query_clusters = _get_glob_clusters(clusters, silent=ip)
-        cluster_records = sdk.status(cluster_names=query_clusters,
+        request = sdk.status(cluster_names=query_clusters,
                                       refresh=refresh)
+        cluster_records = sdk.get(request)
         if ip:
             if len(cluster_records) != 1:
                 with ux_utils.print_exception_no_traceback():
@@ -2894,7 +2895,7 @@ def _down_or_stop_clusters(
         else:
             try:
                 if down:
-                    core.down(name, purge=purge)
+                    sdk.get(sdk.down(name, purge=purge))
                 else:
                     core.stop(name, purge=purge)
             except RuntimeError as e:

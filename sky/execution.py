@@ -7,7 +7,7 @@ import enum
 import getpass
 import os
 import tempfile
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Tuple, Union
 import uuid
 
 import colorama
@@ -107,7 +107,7 @@ def _execute(
     dryrun: bool = False,
     down: bool = False,
     stream_logs: bool = True,
-    handle: Any = None,
+    handle: Optional[backends.ResourceHandle] = None,
     backend: Optional[backends.Backend] = None,
     retry_until_up: bool = False,
     optimize_target: optimizer.OptimizeTarget = optimizer.OptimizeTarget.COST,
@@ -121,7 +121,7 @@ def _execute(
     # Internal only:
     # pylint: disable=invalid-name
     _is_launched_by_spot_controller: bool = False,
-) -> None:
+) -> Tuple[Optional[int], Optional[backends.ResourceHandle]]:
     """Execute an entrypoint.
 
     If sky.Task is given or DAG has not been optimized yet, this will call
@@ -137,8 +137,8 @@ def _execute(
         Note that if errors occur during provisioning/data syncing/setting up,
         the cluster will not be torn down for debugging purposes.
       stream_logs: bool; whether to stream all tasks' outputs to the client.
-      handle: Any; if provided, execution will use an existing backend cluster
-        handle instead of provisioning a new one.
+      handle: Optional[backends.ResourceHandle]; if provided, execution will use
+        an existing backend cluster handle instead of provisioning a new one.
       backend: Backend; backend to use for executing the tasks. Defaults to
         CloudVmRayBackend()
       retry_until_up: bool; whether to retry the provisioning until the cluster
@@ -159,6 +159,13 @@ def _execute(
       idle_minutes_to_autostop: int; if provided, the cluster will be set to
         autostop after this many minutes of idleness.
       no_setup: bool; whether to skip setup commands or not when (re-)launching.
+
+    Returns:
+      job_id: Optional[int]; the job ID of the submitted job. None if the
+        backend is not CloudVmRayBackend, or no job is submitted to
+        the cluster.
+      handle: Optional[backends.ResourceHandle]; the handle to the cluster. None
+        if dryrun.
     """
     dag = dag_utils.convert_entrypoint_to_dag(entrypoint)
     assert len(dag) == 1, f'We support 1 task for now. {dag}'
@@ -273,9 +280,11 @@ def _execute(
                                            cluster_name=cluster_name,
                                            retry_until_up=retry_until_up)
 
-        if dryrun and handle is None:
+        if handle is None:
+            assert dryrun, ('If not dryrun, handle must be set or '
+                            'Stage.PROVISION must be included in stages.')
             logger.info('Dryrun finished.')
-            return
+            return None, None
 
         if Stage.SYNC_WORKDIR in stages and not dryrun:
             if task.workdir is not None:
@@ -293,6 +302,7 @@ def _execute(
         if Stage.PRE_EXEC in stages and not dryrun:
             if idle_minutes_to_autostop is not None:
                 assert isinstance(backend, backends.CloudVmRayBackend)
+                assert isinstance(handle, backends.CloudVmRayResourceHandle)
                 backend.set_autostop(handle,
                                      idle_minutes_to_autostop,
                                      down=down)
@@ -300,7 +310,10 @@ def _execute(
         if Stage.EXEC in stages:
             try:
                 global_user_state.update_last_use(handle.get_cluster_name())
-                backend.execute(handle, task, detach_run, dryrun=dryrun)
+                job_id = backend.execute(handle,
+                                         task,
+                                         detach_run,
+                                         dryrun=dryrun)
             finally:
                 # Enables post_execute() to be run after KeyboardInterrupt.
                 backend.post_execute(handle, down)
@@ -324,6 +337,7 @@ def _execute(
             subprocess_utils.run('sky status --no-show-spot-jobs', env=env)
         print()
         print('\x1b[?25h', end='')  # Show cursor.
+    return job_id, handle
 
 
 @timeline.event
@@ -345,7 +359,7 @@ def launch(
     # Internal only:
     # pylint: disable=invalid-name
     _is_launched_by_spot_controller: bool = False,
-) -> None:
+) -> Tuple[Optional[int], Optional[backends.ResourceHandle]]:
     # NOTE(dev): Keep the docstring consistent between the Python API and CLI.
     """Launch a task.
 
@@ -425,13 +439,20 @@ def launch(
         exceptions.CommandError: any ssh command error.
         exceptions.NoCloudAccessError: if all clouds are disabled.
     Other exceptions may be raised depending on the backend.
+
+    Returns:
+      job_id: Optional[int]; the job ID of the submitted job. None if the
+        backend is not CloudVmRayBackend, or no job is submitted to
+        the cluster.
+      handle: Optional[backends.ResourceHandle]; the handle to the cluster. None
+        if dryrun.
     """
 
     entrypoint = task
     backend_utils.check_cluster_name_not_reserved(cluster_name,
                                                   operation_str='sky.launch')
 
-    _execute(
+    return _execute(
         entrypoint=entrypoint,
         dryrun=dryrun,
         down=down,
@@ -459,7 +480,7 @@ def exec(  # pylint: disable=redefined-builtin
     stream_logs: bool = True,
     backend: Optional[backends.Backend] = None,
     detach_run: bool = False,
-) -> None:
+) -> Tuple[Optional[int], Optional[backends.ResourceHandle]]:
     # NOTE(dev): Keep the docstring consistent between the Python API and CLI.
     """Execute a task on an existing cluster.
 
@@ -504,6 +525,13 @@ def exec(  # pylint: disable=redefined-builtin
             status.
         sky.exceptions.NotSupportedError: if the specified cluster is a
             reserved cluster that does not support this operation.
+
+    Returns:
+      job_id: Optional[int]; the job ID of the submitted job. None if the
+        backend is not CloudVmRayBackend, or no job is submitted to
+        the cluster.
+      handle: Optional[backends.ResourceHandle]; the handle to the cluster. None
+        if dryrun.
     """
     entrypoint = task
     if isinstance(entrypoint, sky.Dag):
@@ -519,18 +547,20 @@ def exec(  # pylint: disable=redefined-builtin
         operation='executing tasks',
         check_cloud_vm_ray_backend=False,
         dryrun=dryrun)
-    _execute(entrypoint=entrypoint,
-             dryrun=dryrun,
-             down=down,
-             stream_logs=stream_logs,
-             handle=handle,
-             backend=backend,
-             stages=[
-                 Stage.SYNC_WORKDIR,
-                 Stage.EXEC,
-             ],
-             cluster_name=cluster_name,
-             detach_run=detach_run)
+    return _execute(
+        entrypoint=entrypoint,
+        dryrun=dryrun,
+        down=down,
+        stream_logs=stream_logs,
+        handle=handle,
+        backend=backend,
+        stages=[
+            Stage.SYNC_WORKDIR,
+            Stage.EXEC,
+        ],
+        cluster_name=cluster_name,
+        detach_run=detach_run,
+    )
 
 
 @usage_lib.entrypoint

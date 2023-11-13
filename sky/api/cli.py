@@ -138,9 +138,6 @@ def _get_glob_storages(storages: List[str]) -> List[str]:
         glob_storage = global_user_state.get_glob_storage_name(storage_object)
         if len(glob_storage) == 0:
             click.echo(f'Storage {storage_object} not found.')
-        else:
-            plural = 's' if len(glob_storage) > 1 else ''
-            click.echo(f'Deleting {len(glob_storage)} storage object{plural}.')
         glob_storages.extend(glob_storage)
     return list(set(glob_storages))
 
@@ -1132,11 +1129,7 @@ def _make_task_or_dag_from_entrypoint_with_overrides(
     if spot_recovery is not None:
         override_params['spot_recovery'] = spot_recovery
 
-    assert len(task.resources) == 1
-    old_resources = list(task.resources)[0]
-    new_resources = old_resources.copy(**override_params)
-
-    task.set_resources({new_resources})
+    task.set_resources_override(override_params)
 
     if num_nodes is not None:
         task.num_nodes = num_nodes
@@ -1144,11 +1137,12 @@ def _make_task_or_dag_from_entrypoint_with_overrides(
         task.name = name
     task.update_envs(env)
     # TODO(wei-lin): move this validation into Python API.
-    if new_resources.accelerators is not None:
-        acc, _ = list(new_resources.accelerators.items())[0]
-        if acc.startswith('tpu-') and task.num_nodes > 1:
-            raise ValueError('Multi-node TPU cluster is not supported. '
-                             f'Got num_nodes={task.num_nodes}.')
+    for resource in task.resources:
+        if resource.accelerators is not None:
+            acc, _ = list(resource.accelerators.items())[0]
+            if acc.startswith('tpu-') and task.num_nodes > 1:
+                raise ValueError('Multi-node TPU cluster is not supported. '
+                                 f'Got num_nodes={task.num_nodes}.')
     return task
 
 
@@ -2051,7 +2045,7 @@ def queue(clusters: List[str], skip_finished: bool, all_users: bool):
 @usage_lib.entrypoint
 def logs(
     cluster: str,
-    job_ids: Optional[Tuple[str, ...]],
+    job_ids: Tuple[str, ...],
     sync_down: bool,
     status: bool,  # pylint: disable=redefined-outer-name
     follow: bool,
@@ -2090,6 +2084,7 @@ def logs(
 
     assert job_ids is None or len(job_ids) <= 1, job_ids
     job_id = None
+    job_ids_to_query: Optional[List[int]] = None
     if job_ids:
         # Already check that len(job_ids) <= 1. This variable is used later
         # in core.tail_logs.
@@ -2097,9 +2092,10 @@ def logs(
             raise click.UsageError(f'Invalid job ID {job_id}. '
                                    'Job ID must be integers.')
         job_id = int(job_ids[0])
-        job_ids_to_query: Optional[Tuple[str, ...]] = (job_ids[0],)
+        job_ids_to_query = [int(job_ids[0])]
     else:
-        job_ids_to_query = job_ids
+        # job_ids is either None or empty list, so it is safe to cast it here.
+        job_ids_to_query = typing.cast(Optional[List[int]], job_ids)
     if status:
         job_statuses = core.job_status(cluster, job_ids_to_query)
         job_id = list(job_statuses.keys())[0]
@@ -3462,8 +3458,14 @@ def storage_ls(all: bool):
               is_flag=True,
               required=False,
               help='Delete all storage objects.')
+@click.option('--yes',
+              '-y',
+              default=False,
+              is_flag=True,
+              required=False,
+              help='Skip confirmation prompt.')
 @usage_lib.entrypoint
-def storage_delete(names: List[str], all: bool):  # pylint: disable=redefined-builtin
+def storage_delete(names: List[str], all: bool, yes: bool):  # pylint: disable=redefined-builtin
     """Delete storage objects.
 
     Examples:
@@ -3482,11 +3484,23 @@ def storage_delete(names: List[str], all: bool):  # pylint: disable=redefined-bu
     if sum([len(names) > 0, all]) != 1:
         raise click.UsageError('Either --all or a name must be specified.')
     if all:
-        click.echo('Deleting all storage objects.')
         storages = sky.storage_ls()
+        if not storages:
+            click.echo('No storage(s) to delete.')
+            return
         names = [s['name'] for s in storages]
     else:
         names = _get_glob_storages(names)
+    if names:
+        if not yes:
+            storage_names = ', '.join(names)
+            storage_str = 'storages' if len(names) > 1 else 'storage'
+            click.confirm(
+                f'Deleting {len(names)} {storage_str}: '
+                f'{storage_names}. Proceed?',
+                default=True,
+                abort=True,
+                show_default=True)
 
     subprocess_utils.run_in_parallel(sky.storage_delete, names)
 
@@ -3741,10 +3755,10 @@ def spot_launch(
         # cluster name against the regex, and the cloud-specific validation will
         # be done by the spot controller when actually launching the spot
         # cluster.
-        resources = list(task.resources)[0]
-        task_cloud = (resources.cloud
-                      if resources.cloud is not None else clouds.Cloud)
-        task_cloud.check_cluster_name_is_valid(name)
+        for resources in task.resources:
+            task_cloud = (resources.cloud
+                          if resources.cloud is not None else clouds.Cloud)
+            task_cloud.check_cluster_name_is_valid(name)
 
     sky.spot_launch(dag,
                     name,

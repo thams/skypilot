@@ -843,10 +843,9 @@ def _launch_with_confirm(
 
     if node_type is None or maybe_status != status_lib.ClusterStatus.UP:
         # No need to sky.launch again when interactive node is already up.
-        sky.launch(
+        request_id = sdk.launch(
             dag,
             dryrun=dryrun,
-            stream_logs=True,
             cluster_name=cluster,
             detach_setup=detach_setup,
             detach_run=detach_run,
@@ -856,6 +855,9 @@ def _launch_with_confirm(
             retry_until_up=retry_until_up,
             no_setup=no_setup,
             clone_disk_from=clone_disk_from,
+        )
+        sdk.stream_and_get(
+            request_id
         )
 
 

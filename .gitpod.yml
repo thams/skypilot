@@ -8,13 +8,14 @@
 # 1. to use a specific conda environment so it doesn't trash the default one
 # 2. to do the pip uninstall grpcio and conda install -c conda-forge grpcio=1.43.0
 tasks:
-  - init: mkdir -p ~/miniconda3
-  - init: wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
-  - init: bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
-  - init: rm -rf ~/miniconda3/miniconda.sh
-  - init: ~/miniconda3/bin/conda init bash
-  - init: ~/miniconda3/bin/conda init zsh
-  - init: conda create -y -n sky python=3.8
-  - init: conda activate sky
-  - init: pip install .[aws] # - init: pip install ".[all]"
-
+  - init: |
+      mkdir -p ~/miniconda3
+      wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh
+      bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+      rm -rf ~/miniconda3/miniconda.sh
+      ~/miniconda3/bin/conda init bash
+      ~/miniconda3/bin/conda init zsh
+      source ~/.bashrc
+      conda create -y -n sky python=3.8
+      conda activate sky
+      pip install .[aws] # - init: pip install ".[all]"
